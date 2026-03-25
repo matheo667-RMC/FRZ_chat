@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>FRZ Chat</title>
+</head>
+<body>
+
+<h2>Connexion</h2>
+<input id="pseudo" placeholder="Pseudo">
+<input id="tag" placeholder="FRZ">
+<input id="num" placeholder="1500">
+<button onclick="login()">Entrer</button>
+
+<div id="chat" style="display:none">
+  <h3 id="userId"></h3>
+  <div id="messages"></div>
+  <input id="messageInput" placeholder="Message...">
+  <button onclick="sendMessage()">Envoyer</button>
+</div>
+
+<script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+
+<script>
+const socket = io();
+
+let userId = '';
+
+function login() {
+  const tag = document.getElementById('tag').value;
+  const num = document.getElementById('num').value;
+
+  userId = tag + '#' + num;
+  document.getElementById('userId').innerText = userId;
+
+  socket.emit('register', userId);
+
+  document.getElementById('chat').style.display = 'block';
+}
+
+function sendMessage() {
+  const msg = document.getElementById('messageInput').value;
+  socket.emit('send_message', { user: userId, message: msg });
+}
+
+socket.on('receive_message', (data) => {
+  const div = document.createElement('div');
+  div.innerText = data.user + ': ' + data.message;
+  document.getElementById('messages').appendChild(div);
+});
+</script>
+
+</body>
+</html>

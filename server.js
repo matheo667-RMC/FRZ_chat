@@ -36,10 +36,11 @@ let users = {};
 io.on('connection', (socket) => {
   console.log('User connected:', socket.id);
 
-  socket.on('register', (userId) => {
-    if (typeof userId !== 'string' || userId.trim().length === 0) {
+  socket.on('register', (rawUserId) => {
+    if (typeof rawUserId !== 'string' || rawUserId.trim().length === 0) {
       return socket.emit('error_message', { error: 'User ID is required and must be a non-empty string.' });
     }
+    const userId = rawUserId.trim();
     if (userId.length > MAX_USER_ID_LENGTH) {
       return socket.emit('error_message', { error: `User ID must not exceed ${MAX_USER_ID_LENGTH} characters.` });
     }
@@ -54,8 +55,8 @@ io.on('connection', (socket) => {
     if (!data || typeof data !== 'object') {
       return socket.emit('error_message', { error: 'Message payload must be an object with "user" and "message" fields.' });
     }
-    if (typeof data.user !== 'string' || data.user.trim().length === 0) {
-      return socket.emit('error_message', { error: 'The "user" field is required and must be a non-empty string.' });
+    if (!users[socket.id]) {
+      return socket.emit('error_message', { error: 'You must register before sending messages.' });
     }
     if (typeof data.message !== 'string' || data.message.trim().length === 0) {
       return socket.emit('error_message', { error: 'The "message" field is required and must be a non-empty string.' });
@@ -63,10 +64,7 @@ io.on('connection', (socket) => {
     if (data.message.length > MAX_MESSAGE_LENGTH) {
       return socket.emit('error_message', { error: `Message must not exceed ${MAX_MESSAGE_LENGTH} characters.` });
     }
-    if (!users[socket.id]) {
-      return socket.emit('error_message', { error: 'You must register before sending messages.' });
-    }
-    io.emit('receive_message', { user: data.user, message: data.message });
+    io.emit('receive_message', { user: users[socket.id].id, message: data.message });
   });
 
   socket.on('disconnect', () => {
@@ -85,16 +83,18 @@ server.on('error', (err) => {
   process.exit(1);
 });
 
-process.on('SIGTERM', () => {
-  console.log('SIGTERM received. Shutting down gracefully...');
-  server.close(() => {
-    process.exit(0);
-  });
-});
+const SHUTDOWN_TIMEOUT = 10000;
 
-process.on('SIGINT', () => {
-  console.log('SIGINT received. Shutting down gracefully...');
+function gracefulShutdown(signal) {
+  console.log(`${signal} received. Shutting down gracefully...`);
   server.close(() => {
     process.exit(0);
   });
-});
+  setTimeout(() => {
+    console.error('Shutdown timed out. Forcing exit.');
+    process.exit(1);
+  }, SHUTDOWN_TIMEOUT);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
